@@ -1,0 +1,10 @@
+{
+  "update_id": 100002,
+  "message": {
+    "message_id": 2,
+    "date": 1792600000,
+    "from": { "id": 0, "is_bot": false, "first_name": "Test" },
+    "chat": { "id": 0, "type": "private" },
+    "text": "/start a_gazole_222_94000"
+  }
+}

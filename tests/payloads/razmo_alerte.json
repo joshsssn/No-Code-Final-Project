@@ -1,0 +1,10 @@
+{
+  "update_id": 100003,
+  "message": {
+    "message_id": 3,
+    "date": 1792600000,
+    "from": { "id": 0, "is_bot": false, "first_name": "Test" },
+    "chat": { "id": 0, "type": "private" },
+    "text": "/alerte gazole 3,00 Créteil"
+  }
+}
