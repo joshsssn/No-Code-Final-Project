@@ -1,0 +1,425 @@
+[
+  {
+    "updatedAt": "2026-10-22T11:51:01.577Z",
+    "createdAt": "2026-10-17T16:08:15.628Z",
+    "id": "ATNKfNyYD9JqrDgC",
+    "name": "Carbu - WF2 Find stations",
+    "description": "Sous-workflow sans IA : géocode un lieu, cherche les stations à 5 km (10 km si moins de 3), renvoie le top 5 + min/moyenne/écart.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "parameters": {
+          "workflowInputs": {
+            "values": [
+              {
+                "name": "place"
+              },
+              {
+                "name": "fuel"
+              }
+            ]
+          }
+        },
+        "id": "fff5d041-d491-4435-a2b4-327945a15d93",
+        "name": "When called by another workflow",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          0,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Normalise le lieu et le carburant (synonymes -> gazole, sp95, e10, sp98, e85, gplc)\nconst MAP = { gazole: 'gazole', diesel: 'gazole', gasoil: 'gazole', gazoil: 'gazole', sp95: 'sp95', '95': 'sp95', e10: 'e10', sp95e10: 'e10', sp98: 'sp98', '98': 'sp98', e85: 'e85', gplc: 'gplc', gpl: 'gplc' };\nconst i = $input.first().json;\nconst raw = String(i.fuel || '').toLowerCase().replace(/[\\s-]/g, '');\nreturn [{ json: { place: String(i.place || '').trim(), fuel: MAP[raw] || '' } }];"
+        },
+        "id": "d39f50f3-c92d-40e4-a0a4-60112ce011b6",
+        "name": "Normalize input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://data.geopf.fr/geocodage/search",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.place }}"
+              },
+              {
+                "name": "limit",
+                "value": "1"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "id": "dd5e744d-6070-427e-b6c2-254cd19c7b6e",
+        "name": "Geocode",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          448,
+          304
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Sortie d'echec propre { ok: false, reason } (lieu introuvable, carburant inconnu, API en panne)\nconst n = $('Normalize input').first().json;\nconst j = $input.first().json;\nlet reason = 'place_not_found';\nif (!n.place) reason = 'missing_place';\nelse if (!n.fuel) reason = 'unknown_fuel';\nelse if (j.error) reason = 'api_down';\nreturn [{ json: { ok: false, reason, place: n.place, fuel: n.fuel } }];"
+        },
+        "id": "e589abed-b89a-4c2c-9558-ca590a597bbc",
+        "name": "Build failure",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1008,
+          560
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ ($json.features || []).length }}",
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                },
+                "rightValue": 0
+              },
+              {
+                "leftValue": "={{ $('Normalize input').first().json.fuel }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "b0d084f0-672e-47ba-9f45-ae170be33c07",
+        "name": "Address found?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          672,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "where",
+                "value": "=within_distance(geom, geom'POINT({{ $json.features[0].geometry.coordinates[0] }} {{ $json.features[0].geometry.coordinates[1] }})', 5km) AND {{ $('Normalize input').first().json.fuel }}_prix IS NOT NULL"
+              },
+              {
+                "name": "order_by",
+                "value": "={{ $('Normalize input').first().json.fuel }}_prix"
+              },
+              {
+                "name": "select",
+                "value": "=id,adresse,ville,cp,{{ $('Normalize input').first().json.fuel }}_prix,{{ $('Normalize input').first().json.fuel }}_maj"
+              },
+              {
+                "name": "limit",
+                "value": "20"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "id": "d861dd1f-67c9-47cb-8f5c-f3edb73d1a56",
+        "name": "Fuel prices 5 km",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          880,
+          208
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ ($json.results || []).length }}",
+                "operator": {
+                  "type": "number",
+                  "operation": "gte"
+                },
+                "rightValue": 3
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "4710fd47-d5cc-4fd2-9f1f-cbe031cb2198",
+        "name": "Enough stations?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1104,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Classe les stations par prix, garde le top 5 et calcule min / moyenne / ecart\nconst wide = $('Fuel prices 10 km').isExecuted;\nconst res = $input.first().json.results || [];\nconst fuel = $('Normalize input').first().json.fuel;\nconst f = $('Geocode').first().json.features[0];\nconst title = s => String(s || '').toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');\nconst st = res.filter(r => r[fuel + '_prix'] != null)\n  .map(r => ({ name: title(r.adresse) + ' (' + title(r.ville) + ')', address: title(r.adresse), city: title(r.ville), price: r[fuel + '_prix'], updated_at: r[fuel + '_maj'] }))\n  .sort((a, b) => a.price - b.price);\nconst base = { fuel, place_label: f.properties.label, postcode: f.properties.postcode, lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0], radius_km: wide ? 10 : 5 };\nif (!st.length) return [{ json: { ok: false, reason: 'no_station', ...base } }];\nconst p = st.map(s => s.price);\nconst r3 = x => Math.round(x * 1000) / 1000;\nconst min = Math.min(...p);\nreturn [{ json: { ok: true, ...base, stations: st.slice(0, 5), min, avg: r3(p.reduce((a, b) => a + b, 0) / p.length), spread: r3(Math.max(...p) - min), station_count: st.length } }];"
+        },
+        "id": "a7682bc4-b147-4dc4-b087-a7489d858a4b",
+        "name": "Rank & trim",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1552,
+          208
+        ]
+      },
+      {
+        "parameters": {
+          "url": "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "where",
+                "value": "=within_distance(geom, geom'POINT({{ $('Geocode').first().json.features[0].geometry.coordinates[0] }} {{ $('Geocode').first().json.features[0].geometry.coordinates[1] }})', 10km) AND {{ $('Normalize input').first().json.fuel }}_prix IS NOT NULL"
+              },
+              {
+                "name": "order_by",
+                "value": "={{ $('Normalize input').first().json.fuel }}_prix"
+              },
+              {
+                "name": "select",
+                "value": "=id,adresse,ville,cp,{{ $('Normalize input').first().json.fuel }}_prix,{{ $('Normalize input').first().json.fuel }}_maj"
+              },
+              {
+                "name": "limit",
+                "value": "20"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "id": "2edf7d78-64c8-45ec-94a6-9fe2afc5db4b",
+        "name": "Fuel prices 10 km",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1328,
+          304
+        ],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueErrorOutput"
+      }
+    ],
+    "connections": {
+      "When called by another workflow": {
+        "main": [
+          [
+            {
+              "node": "Normalize input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize input": {
+        "main": [
+          [
+            {
+              "node": "Geocode",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Geocode": {
+        "main": [
+          [
+            {
+              "node": "Address found?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Build failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Address found?": {
+        "main": [
+          [
+            {
+              "node": "Fuel prices 5 km",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Build failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fuel prices 5 km": {
+        "main": [
+          [
+            {
+              "node": "Enough stations?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Build failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Enough stations?": {
+        "main": [
+          [
+            {
+              "node": "Rank & trim",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Fuel prices 10 km",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fuel prices 10 km": {
+        "main": [
+          [
+            {
+              "node": "Rank & trim",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Build failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "availableInMCP": true,
+      "errorWorkflow": "ThW2LqFvQzkmtkDK",
+      "timezone": "Europe/Paris",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": {
+      "aiBuilderAssisted": true,
+      "builderVariant": "mcp"
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "50f338f8-1b84-4a9c-8455-9c4524082b6c",
+    "activeVersionId": "50f338f8-1b84-4a9c-8455-9c4524082b6c",
+    "versionCounter": 4,
+    "triggerCount": 0,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-10-17T16:08:15.633Z",
+        "createdAt": "2026-10-17T16:08:15.633Z",
+        "role": "workflow:owner",
+        "workflowId": "ATNKfNyYD9JqrDgC",
+        "projectId": "eWYSi6FqDFFapx4F",
+        "project": {
+          "updatedAt": "2025-06-12T10:46:58.347Z",
+          "createdAt": "2025-06-12T10:46:33.267Z",
+          "id": "eWYSi6FqDFFapx4F",
+          "name": "Josh Eliott SOUSSAN <joshsoussan@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "cddded04-03e3-498f-a37d-dd772d096da0"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]

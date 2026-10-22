@@ -1,0 +1,40 @@
+{
+  "alerts": {
+    "id_in_source_instance": "0YNY8S0xLGtvK7OI",
+    "columns": {
+      "chat_id": "string",
+      "fuel": "string",
+      "threshold": "number",
+      "postcode": "string",
+      "place_label": "string",
+      "lat": "number",
+      "lon": "number",
+      "armed": "boolean",
+      "last_alert_price": "number",
+      "last_alert_at": "date",
+      "active": "boolean"
+    }
+  },
+  "price_history": {
+    "id_in_source_instance": "slz9z7UPM3yqPSEd",
+    "columns": {
+      "day": "date",
+      "slot": "string (am | pm)",
+      "place_label": "string",
+      "fuel": "string",
+      "min_price": "number",
+      "avg_price": "number",
+      "station_count": "number"
+    }
+  },
+  "config": {
+    "id_in_source_instance": "5n1kBw38vfsApLF7",
+    "columns": { "key": "string", "value": "string" },
+    "rows": [
+      { "key": "rapido_username", "value": "rapido_carbu_bot" },
+      { "key": "razmo_username", "value": "razmo_carbu_bot" },
+      { "key": "llm_model", "value": "deepseek/deepseek-v4.1-flash-1017" },
+      { "key": "owner_chat_id", "value": "" }
+    ]
+  }
+}
