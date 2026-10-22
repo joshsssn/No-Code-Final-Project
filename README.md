@@ -170,8 +170,8 @@ python tests/send_update.py razmo  "/mesalertes"
 
 | | |
 |---|---|
-| ![WF1 Rapido](docs/screenshots/wf1-rapido.png) | ![WF4 Razmo](docs/screenshots/wf4-razmo.png) |
-| ![WF3 Price sweep](docs/screenshots/wf3-sweep.png) | ![Telegram conversation](docs/screenshots/telegram-demo.png) |
+| ![WF1 Rapido](docs/screenshots/rapido.png) | ![WF4 Razmo](docs/screenshots/razmo.png) |
+| ![WF3 Price sweep](docs/screenshots/wf3.png) | ![Telegram conversation](docs/screenshots/telegram.png) |
 
 ---
 
