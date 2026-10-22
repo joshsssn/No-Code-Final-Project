@@ -1,0 +1,1777 @@
+[
+  {
+    "updatedAt": "2026-10-22T11:51:02.215Z",
+    "createdAt": "2026-10-17T16:23:49.223Z",
+    "id": "5yvBg4c45Jf2vavL",
+    "name": "Carbu - WF4 Razmo",
+    "description": "Bot Razmo : /alerte, deep link /start a_..., /mesalertes, /stop, /tendance, /sweep (propriétaire), menu et enregistrement du propriétaire.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "id": "b278b9f5-ca4f-4d77-a1de-dcf80bdc54a4",
+        "name": "Telegram Trigger (Razmo)",
+        "webhookId": "7f6db8bf-fa22-468e-a4f0-5d2d9f6c4c17",
+        "type": "n8n-nodes-base.telegramTrigger",
+        "typeVersion": 1.5,
+        "position": [
+          0,
+          800
+        ],
+        "parameters": {
+          "updates": [
+            "message"
+          ],
+          "additionalFields": {}
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "tZo3MESnFhVP9vn5",
+            "name": "Telegram Razmo"
+          }
+        }
+      },
+      {
+        "id": "9a5f7b18-9b69-4e79-83bd-06b4d1542fd8",
+        "name": "Read the message",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          800
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Lit le message Razmo : commande, carburant, seuil (1,65 -> 1.65), lieu, payload /start a_gazole_165_94000\nconst MAP = { gazole: 'gazole', diesel: 'gazole', gasoil: 'gazole', gazoil: 'gazole', sp95: 'sp95', '95': 'sp95', e10: 'e10', sp95e10: 'e10', sp98: 'sp98', '98': 'sp98', e85: 'e85', gplc: 'gplc', gpl: 'gplc' };\nconst norm = w => MAP[String(w || '').toLowerCase().replace(/[\\s-]/g, '')] || '';\nconst toNum = s => /^\\d+([.,]\\d+)?$/.test(String(s || '')) ? parseFloat(String(s).replace(',', '.')) : NaN;\nconst m = $input.first().json.message || {};\nconst text = String(m.text || '').trim();\nconst chat_id = String((m.chat && m.chat.id) || '');\nconst cmd = ((text.match(/^\\/(\\w+)/) || [])[1] || '').toLowerCase();\nconst args = text.split(/\\s+/).slice(1);\nlet command = 'menu', source = 'command', fuel = '', threshold = null, place = '', n = null;\nif (cmd === 'start' && /^a_/.test(args[0] || '')) {\n  const p = args[0].split('_');\n  command = 'alerte'; source = 'deeplink'; fuel = norm(p[1]);\n  const c = parseInt(p[2], 10); threshold = Number.isFinite(c) ? c / 100 : null; place = p[3] || '';\n} else if (cmd === 'start') command = 'start';\nelse if (cmd === 'alerte') { command = 'alerte'; fuel = norm(args[0]); const t = toNum(args[1]); threshold = Number.isFinite(t) ? t : null; place = args.slice(2).join(' '); }\nelse if (cmd === 'mesalertes') command = 'list';\nelse if (cmd === 'stop') { command = 'stop'; const k = parseInt(args[0], 10); n = Number.isFinite(k) ? k : null; }\nelse if (cmd === 'tendance') command = 'trend';\nelse if (cmd === 'sweep') command = 'sweep';\nelse if (cmd === 'panne') command = 'drill';\nconst threshold_ok = threshold !== null && threshold >= 0.5 && threshold <= 3.5;\nreturn [{ json: { chat_id, text, command, source, fuel, threshold, threshold_ok, place, n } }];"
+        }
+      },
+      {
+        "id": "d4582383-39dd-43bf-8e1c-41a3a1eeb703",
+        "name": "Alert Router",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          440,
+          800
+        ],
+        "parameters": {
+          "mode": "rules",
+          "rules": {
+            "values": [
+              {
+                "renameOutput": true,
+                "outputKey": "alerte",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "alerte"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "renameOutput": true,
+                "outputKey": "mesalertes",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "list"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "renameOutput": true,
+                "outputKey": "stop",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "stop"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "renameOutput": true,
+                "outputKey": "tendance",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "trend"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "renameOutput": true,
+                "outputKey": "sweep",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "sweep"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "renameOutput": true,
+                "outputKey": "start",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "start"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "renameOutput": true,
+                "outputKey": "panne",
+                "conditions": {
+                  "options": {
+                    "caseSensitive": false,
+                    "leftValue": "",
+                    "typeValidation": "strict"
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "drill"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra",
+            "renameFallbackOutput": "menu"
+          }
+        }
+      },
+      {
+        "id": "165d45e9-6e08-448d-91ae-142e3a1b913e",
+        "name": "Geocode place",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueErrorOutput",
+        "position": [
+          700,
+          120
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://data.geopf.fr/geocodage/search",
+          "sendQuery": true,
+          "specifyQuery": "keypair",
+          "queryParameters": {
+            "parameters": [
+              {
+                "name": "q",
+                "value": "={{ $json.place }}"
+              },
+              {
+                "name": "limit",
+                "value": "1"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            },
+            "timeout": 10000
+          }
+        }
+      },
+      {
+        "id": "a47ba03d-34ec-4723-a1be-8d23040691af",
+        "name": "Read my alerts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          700,
+          420
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "chat_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.chat_id }}"
+              },
+              {
+                "keyName": "active",
+                "condition": "isTrue"
+              }
+            ]
+          },
+          "returnAll": true,
+          "orderBy": true,
+          "orderByColumn": "id",
+          "orderByDirection": "ASC"
+        }
+      },
+      {
+        "id": "e679ea4c-ce8a-4ced-bf44-377304e49624",
+        "name": "Read my alerts (stop)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          700,
+          600
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "chat_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.chat_id }}"
+              },
+              {
+                "keyName": "active",
+                "condition": "isTrue"
+              }
+            ]
+          },
+          "returnAll": true,
+          "orderBy": true,
+          "orderByColumn": "id",
+          "orderByDirection": "ASC"
+        }
+      },
+      {
+        "id": "55a45a2a-6c4b-4d1f-a47d-b812c2aeb418",
+        "name": "Read my alerts (trend)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          700,
+          780
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "chat_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.chat_id }}"
+              },
+              {
+                "keyName": "active",
+                "condition": "isTrue"
+              }
+            ]
+          },
+          "returnAll": true
+        }
+      },
+      {
+        "id": "1f1ec4c8-f56f-428e-a3d7-d7cfdc8c5a89",
+        "name": "Read owner (sweep)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          700,
+          980
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "5n1kBw38vfsApLF7",
+            "cachedResultName": "config"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "owner_chat_id"
+              }
+            ]
+          },
+          "returnAll": false,
+          "limit": 1
+        }
+      },
+      {
+        "id": "ecf8b7ed-36ab-4c28-96d6-cd82db5cce05",
+        "name": "Read owner (start)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          700,
+          1260
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "5n1kBw38vfsApLF7",
+            "cachedResultName": "config"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "owner_chat_id"
+              }
+            ]
+          },
+          "returnAll": false,
+          "limit": 1
+        }
+      },
+      {
+        "id": "e940a6b7-8de5-4473-808b-8dd6bdf05d1f",
+        "name": "Razmo menu",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          1300
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Menu de Razmo ; signale si l'utilisateur vient d'etre enregistre comme proprietaire\nconst q = $('Read the message').first().json;\nlet owner = false;\ntry { owner = $('Register owner').isExecuted; } catch (e) { owner = false; }\nconst text = (owner ? 'Razmo te reconnaît comme chef. Toi seul peux lancer /sweep.\\n\\n' : '')\n  + '🐀 <b>Razmo surveille les pompes. Razmo patient.</b>\\n\\n'\n  + '<code>/alerte gazole 1,65 Créteil</code> : Razmo te prévient quand le prix passe sous ton seuil.\\n'\n  + '<code>/mesalertes</code> : ce que Razmo surveille.\\n'\n  + '<code>/stop 2</code> : Razmo arrête l\\'alerte n°2.\\n'\n  + '<code>/tendance</code> : le prix le plus bas par jour, sur 7 jours.\\n'\n  + '<code>/sweep</code> et <code>/panne</code> : réservés au chef (tournée immédiate, test de panne).\\n\\n'\n  + 'Razmo fait sa tournée à 7 h et 18 h. Pour une pompe tout de suite, demande à Rapido : @rapido_carbu_bot';\nreturn [{ json: { chat_id: q.chat_id, text } }];"
+        }
+      },
+      {
+        "id": "4885bbe9-93ba-48f3-9eba-2bcd866cd81a",
+        "name": "Alert usage",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1140,
+          220
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Explique ce qui cloche dans l'alerte (voix de Razmo) + message d'usage\nconst q = $('Read the message').first().json;\nconst g = $input.first().json;\nlet why = 'Razmo trouve pas ce lieu sur sa carte.';\nif (g.error) why = 'Les pompes répondent pas à Razmo. Razmo réessaie plus tard. Razmo patient.';\nelse if (!q.fuel) why = 'Razmo connaît pas ce carburant.';\nelse if (!q.threshold_ok) why = 'Razmo veut un seuil entre 0,50 et 3,50 €.';\nelse if (!q.place) why = 'Razmo veut savoir où surveiller.';\nconst text = why + '\\n\\nRazmo explique : <code>/alerte gazole 1,65 Créteil</code>\\nCarburants : gazole, sp95, e10, sp98, e85, gplc.';\nreturn [{ json: { chat_id: q.chat_id, text } }];"
+        }
+      },
+      {
+        "id": "0a38d0cb-86be-4326-950a-4bcbd473e929",
+        "name": "Valid alert?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          920,
+          120
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $('Read the message').first().json.fuel }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              },
+              {
+                "leftValue": "={{ $('Read the message').first().json.threshold_ok }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              },
+              {
+                "leftValue": "={{ ($json.features || []).length }}",
+                "operator": {
+                  "type": "number",
+                  "operation": "gt"
+                },
+                "rightValue": 0
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "8554eb3e-6a78-4985-914c-72f8a0fa1921",
+        "name": "Shape alert record",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          1140,
+          40
+        ],
+        "parameters": {
+          "mode": "manual",
+          "includeOtherFields": false,
+          "assignments": {
+            "assignments": [
+              {
+                "id": "s1",
+                "name": "chat_id",
+                "value": "={{ $('Read the message').first().json.chat_id }}",
+                "type": "string"
+              },
+              {
+                "id": "s2",
+                "name": "fuel",
+                "value": "={{ $('Read the message').first().json.fuel }}",
+                "type": "string"
+              },
+              {
+                "id": "s3",
+                "name": "threshold",
+                "value": "={{ $('Read the message').first().json.threshold }}",
+                "type": "number"
+              },
+              {
+                "id": "s4",
+                "name": "postcode",
+                "value": "={{ $json.features[0].properties.postcode }}",
+                "type": "string"
+              },
+              {
+                "id": "s5",
+                "name": "place_label",
+                "value": "={{ $json.features[0].properties.label }}",
+                "type": "string"
+              },
+              {
+                "id": "s6",
+                "name": "lat",
+                "value": "={{ $json.features[0].geometry.coordinates[1] }}",
+                "type": "number"
+              },
+              {
+                "id": "s7",
+                "name": "lon",
+                "value": "={{ $json.features[0].geometry.coordinates[0] }}",
+                "type": "number"
+              },
+              {
+                "id": "s8",
+                "name": "armed",
+                "value": true,
+                "type": "boolean"
+              },
+              {
+                "id": "s9",
+                "name": "active",
+                "value": true,
+                "type": "boolean"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "16cd313b-c636-42c6-a1e5-97d2dc1faefa",
+        "name": "Upsert alert",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1360,
+          40
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "chat_id": "={{ $json.chat_id }}",
+              "fuel": "={{ $json.fuel }}",
+              "threshold": "={{ $json.threshold }}",
+              "postcode": "={{ $json.postcode }}",
+              "place_label": "={{ $json.place_label }}",
+              "lat": "={{ $json.lat }}",
+              "lon": "={{ $json.lon }}",
+              "armed": "={{ $json.armed }}",
+              "active": "={{ $json.active }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "chat_id",
+                "displayName": "chat_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "fuel",
+                "displayName": "fuel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "threshold",
+                "displayName": "threshold",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "postcode",
+                "displayName": "postcode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "place_label",
+                "displayName": "place_label",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "lat",
+                "displayName": "lat",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "lon",
+                "displayName": "lon",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "armed",
+                "displayName": "armed",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "active",
+                "displayName": "active",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true
+              }
+            ]
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "chat_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.chat_id }}"
+              },
+              {
+                "keyName": "fuel",
+                "condition": "eq",
+                "keyValue": "={{ $json.fuel }}"
+              },
+              {
+                "keyName": "postcode",
+                "condition": "eq",
+                "keyValue": "={{ $json.postcode }}"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "a3cca86c-9d66-4c6f-a6d8-ce799d4d3c12",
+        "name": "Alert confirmation",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1580,
+          40
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Confirme l'alerte dans la voix de Razmo\nconst a = $('Shape alert record').first().json;\nconst e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst fuel = String(a.fuel || '');\nconst seuil = Number(a.threshold).toFixed(2).replace('.', ',');\nconst text = 'Razmo a compris. <b>' + e(fuel.charAt(0).toUpperCase() + fuel.slice(1)) + ' sous ' + seuil + ' €</b> à ' + e(a.place_label) + '. Razmo bouge pas de la pompe.\\n\\nRazmo fait sa tournée à 7 h et 18 h.';\nreturn [{ json: { chat_id: a.chat_id, text } }];"
+        }
+      },
+      {
+        "id": "00b05bbf-8292-4faf-a82a-0cfabd2d4f79",
+        "name": "Split for Telegram",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1820,
+          800
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Decoupe chaque message en morceaux de moins de 4000 caracteres (limite Telegram)\nconst out = [];\nfor (const it of $input.all()) {\n  let rest = String(it.json.text || '');\n  while (rest.length > 3900) {\n    let cut = rest.lastIndexOf('\\n', 3900);\n    if (cut < 1000) cut = 3900;\n    out.push({ json: { chat_id: it.json.chat_id, text: rest.slice(0, cut) } });\n    rest = rest.slice(cut);\n  }\n  if (rest.trim()) out.push({ json: { chat_id: it.json.chat_id, text: rest } });\n}\nreturn out;"
+        }
+      },
+      {
+        "id": "1d228944-c48d-489a-84f5-fc4c52db5c64",
+        "name": "Format alert list",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          920,
+          420
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Liste numerotee des alertes actives (le numero sert a /stop)\nconst q = $('Read the message').first().json;\nconst e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst rows = $input.all().map(i => i.json).filter(r => r.id);\nif (!rows.length) return [{ json: { chat_id: q.chat_id, text: 'Razmo surveille rien pour toi. Essaie <code>/alerte gazole 1,65 Créteil</code>.' } }];\nconst lines = rows.map((r, i) => (i + 1) + '. ' + e(r.fuel) + ' sous <b>' + Number(r.threshold).toFixed(2).replace('.', ',') + ' €</b> à ' + e(r.place_label) + (r.armed ? '' : ' (déjà sonnée, Razmo attend que ça remonte)'));\nreturn [{ json: { chat_id: q.chat_id, text: 'Razmo surveille ça pour toi :\\n\\n' + lines.join('\\n') + '\\n\\nPour arrêter : <code>/stop 1</code>' } }];"
+        }
+      },
+      {
+        "id": "efc47ad2-d064-4a43-9e33-a244563da95f",
+        "name": "Pick alert to stop",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          920,
+          600
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Retrouve l'alerte n (meme numerotation que /mesalertes)\nconst q = $('Read the message').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.id);\nconst r = q.n ? rows[q.n - 1] : null;\nreturn [{ json: { found: !!r, row_id: r ? r.id : null, fuel: r ? r.fuel : '', place_label: r ? r.place_label : '', count: rows.length } }];"
+        }
+      },
+      {
+        "id": "bae85b2b-e70d-4a68-a65f-01b053990941",
+        "name": "Alert found?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1140,
+          600
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.found }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "e4ba5f8a-d7fe-447c-ad86-1f378156d5c0",
+        "name": "Deactivate alert",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1360,
+          560
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "id",
+                "condition": "eq",
+                "keyValue": "={{ $json.row_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "active": false
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "active",
+                "displayName": "active",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "bfc3ad4c-1105-41f9-9720-90e476a2e6c5",
+        "name": "Stop reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1580,
+          600
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Confirme l'arret de l'alerte ou explique /stop\nconst q = $('Read the message').first().json;\nconst p = $('Pick alert to stop').first().json;\nconst e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nlet text;\nif (p.found) text = 'Razmo arrête de surveiller le ' + e(p.fuel) + ' à ' + e(p.place_label) + '. Razmo range ses jumelles.';\nelse if (!p.count) text = 'Razmo surveille rien pour toi. Rien à arrêter.';\nelse text = 'Razmo trouve pas cette alerte. Regarde <code>/mesalertes</code> puis <code>/stop 1</code>.';\nreturn [{ json: { chat_id: q.chat_id, text } }];"
+        }
+      },
+      {
+        "id": "cb6d6c22-386c-424d-a69e-172423502001",
+        "name": "Read price history (7 days)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          920,
+          780
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "slz9z7UPM3yqPSEd",
+            "cachedResultName": "price_history"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "day",
+                "condition": "gte",
+                "keyValue": "={{ $now.setZone('Europe/Paris').minus({ days: 7 }).startOf('day').toISO() }}"
+              }
+            ]
+          },
+          "returnAll": true,
+          "orderBy": true,
+          "orderByColumn": "day",
+          "orderByDirection": "ASC"
+        }
+      },
+      {
+        "id": "5f4b9adb-0b2c-479e-9e93-aafaa2607b68",
+        "name": "Format trend",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1140,
+          780
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Minimum par jour sur 7 jours (price_history), limite aux lieux/carburants des alertes de l'utilisateur si possible\nconst q = $('Read the message').first().json;\nconst e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst mine = $('Read my alerts (trend)').all().map(i => i.json).filter(r => r.id).map(r => r.place_label + '|' + r.fuel);\nlet rows = $input.all().map(i => i.json).filter(r => r.id);\nconst own = rows.filter(r => mine.includes(r.place_label + '|' + r.fuel));\nif (own.length) rows = own;\nif (!rows.length) return [{ json: { chat_id: q.chat_id, text: \"Razmo a pas encore d'historique. Razmo note les prix à chaque tournée, à 7 h et 18 h.\" } }];\nconst groups = {};\nfor (const r of rows) {\n  const k = r.fuel + ' · ' + r.place_label;\n  const d = DateTime.fromISO(String(r.day)).setZone('Europe/Paris').toFormat('dd/MM');\n  groups[k] = groups[k] || {};\n  if (groups[k][d] === undefined || r.min_price < groups[k][d]) groups[k][d] = r.min_price;\n}\nconst blocks = Object.entries(groups).slice(0, 10).map(([k, days]) => '<b>' + e(k) + '</b>\\n' + Object.entries(days).map(([d, v]) => d + ' : ' + Number(v).toFixed(3).replace(/0$/, '').replace('.', ',') + ' €').join('\\n'));\nreturn [{ json: { chat_id: q.chat_id, text: 'Razmo a noté le prix le plus bas, jour par jour (7 jours) :\\n\\n' + blocks.join('\\n\\n') } }];"
+        }
+      },
+      {
+        "id": "aece3590-b395-4401-af5d-4b105b3762fd",
+        "name": "Is owner?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          920,
+          980
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.value || \"\" }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              },
+              {
+                "leftValue": "={{ $json.value || \"\" }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "rightValue": "={{ $('Read the message').first().json.chat_id }}"
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "cdc748fa-127a-4fbf-9276-62dae06f2a14",
+        "name": "Run price sweep (WF3)",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.4,
+        "alwaysOutputData": true,
+        "onError": "continueErrorOutput",
+        "position": [
+          1140,
+          940
+        ],
+        "parameters": {
+          "mode": "once",
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "ljnG8v991Pbmto9P",
+            "cachedResultName": "Carbu - WF3 Price sweep"
+          },
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "c0043425-a3e7-4041-9bcf-bcb336cfbd87",
+        "name": "Sweep report",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          940
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// Compte rendu du /sweep dans la voix de Razmo\nconst q = $('Read the message').first().json;\nconst s = $input.first().json || {};\nif (s.error) return [{ json: { chat_id: q.chat_id, text: 'Les pompes répondent pas à Razmo. Razmo réessaie plus tard. Razmo patient.' } }];\nconst checked = s.checked || 0, fired = s.fired || 0;\nreturn [{ json: { chat_id: q.chat_id, text: 'Razmo a fait sa tournée : ' + checked + ' alerte(s) vérifiée(s), ' + fired + ' ping(s) envoyé(s).' } }];"
+        }
+      },
+      {
+        "id": "bfc2ff80-4a88-44c5-848d-9b989911b625",
+        "name": "Not owner",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1140,
+          1100
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// /sweep refuse : reserve au proprietaire\nconst q = $('Read the message').first().json;\nreturn [{ json: { chat_id: q.chat_id, text: \"Razmo fait sa tournée tout seul, à 7 h et 18 h. /sweep, c'est réservé au chef.\" } }];"
+        }
+      },
+      {
+        "id": "83e64967-7941-4bd9-96d5-d8fee53549af",
+        "name": "No owner yet?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          920,
+          1260
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.value || \"\" }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "empty",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "f56a4815-5641-491d-9b4b-4a39a17aacb1",
+        "name": "Register owner",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1140,
+          1220
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "5n1kBw38vfsApLF7",
+            "cachedResultName": "config"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "owner_chat_id"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "value": "={{ $('Read the message').first().json.chat_id }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "3c5ba050-dd32-4254-9c60-6c80ac0a0cd7",
+        "name": "Send Telegram (Razmo)",
+        "webhookId": "18c2086b-de03-48b5-8d6b-f6b239288125",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          2040,
+          800
+        ],
+        "parameters": {
+          "resource": "message",
+          "operation": "sendMessage",
+          "chatId": "={{ $json.chat_id }}",
+          "text": "={{ $json.text }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": true
+          }
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "tZo3MESnFhVP9vn5",
+            "name": "Telegram Razmo"
+          }
+        }
+      },
+      {
+        "id": "59a82e3e-2712-43a5-85d0-1e6da7808667",
+        "name": "Read owner (drill)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          700,
+          1460
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "5n1kBw38vfsApLF7",
+            "cachedResultName": "config"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "owner_chat_id"
+              }
+            ]
+          },
+          "returnAll": false,
+          "limit": 1
+        }
+      },
+      {
+        "id": "4fb986d7-63af-4dcf-a844-83d4c151f3af",
+        "name": "Is owner (drill)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          920,
+          1460
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.value || \"\" }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              },
+              {
+                "leftValue": "={{ $json.value || \"\" }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "rightValue": "={{ $('Read the message').first().json.chat_id }}"
+              }
+            ],
+            "combinator": "and"
+          }
+        }
+      },
+      {
+        "id": "d4a205ec-e7a1-4233-b5fe-fc530ce7eb07",
+        "name": "Failure drill (bad URL)",
+        "notes": "Deliberate failure for the live demo: this dataset does not exist, the node fails and WF5 alerts the owner.",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1140,
+          1420
+        ],
+        "parameters": {
+          "method": "GET",
+          "url": "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/this-dataset-does-not-exist/records",
+          "options": {
+            "timeout": 10000
+          }
+        }
+      },
+      {
+        "id": "d4a7775e-6f97-4635-b9a0-721e1edde172",
+        "name": "Not owner (drill)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1140,
+          1560
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "// /panne refuse : reserve au proprietaire\nconst q = $('Read the message').first().json;\nreturn [{ json: { chat_id: q.chat_id, text: \"Razmo casse rien sans l'accord du chef. /panne, c'est réservé au chef.\" } }];"
+        }
+      }
+    ],
+    "connections": {
+      "Telegram Trigger (Razmo)": {
+        "main": [
+          [
+            {
+              "node": "Read the message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read the message": {
+        "main": [
+          [
+            {
+              "node": "Alert Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Router": {
+        "main": [
+          [
+            {
+              "node": "Geocode place",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Read my alerts",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Read my alerts (stop)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Read my alerts (trend)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Read owner (sweep)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Read owner (start)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Read owner (drill)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Razmo menu",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Geocode place": {
+        "main": [
+          [
+            {
+              "node": "Valid alert?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Alert usage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read my alerts": {
+        "main": [
+          [
+            {
+              "node": "Format alert list",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read my alerts (stop)": {
+        "main": [
+          [
+            {
+              "node": "Pick alert to stop",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read my alerts (trend)": {
+        "main": [
+          [
+            {
+              "node": "Read price history (7 days)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read owner (sweep)": {
+        "main": [
+          [
+            {
+              "node": "Is owner?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read owner (start)": {
+        "main": [
+          [
+            {
+              "node": "No owner yet?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Razmo menu": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert usage": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Valid alert?": {
+        "main": [
+          [
+            {
+              "node": "Shape alert record",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Alert usage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Shape alert record": {
+        "main": [
+          [
+            {
+              "node": "Upsert alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert confirmation": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split for Telegram": {
+        "main": [
+          [
+            {
+              "node": "Send Telegram (Razmo)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format alert list": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pick alert to stop": {
+        "main": [
+          [
+            {
+              "node": "Alert found?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert found?": {
+        "main": [
+          [
+            {
+              "node": "Deactivate alert",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Stop reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Deactivate alert": {
+        "main": [
+          [
+            {
+              "node": "Stop reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Stop reply": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read price history (7 days)": {
+        "main": [
+          [
+            {
+              "node": "Format trend",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format trend": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is owner?": {
+        "main": [
+          [
+            {
+              "node": "Run price sweep (WF3)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Not owner",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run price sweep (WF3)": {
+        "main": [
+          [
+            {
+              "node": "Sweep report",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Sweep report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sweep report": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Not owner": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "No owner yet?": {
+        "main": [
+          [
+            {
+              "node": "Register owner",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Razmo menu",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Register owner": {
+        "main": [
+          [
+            {
+              "node": "Razmo menu",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upsert alert": {
+        "main": [
+          [
+            {
+              "node": "Alert confirmation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read owner (drill)": {
+        "main": [
+          [
+            {
+              "node": "Is owner (drill)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is owner (drill)?": {
+        "main": [
+          [
+            {
+              "node": "Failure drill (bad URL)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Not owner (drill)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Not owner (drill)": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "availableInMCP": true,
+      "errorWorkflow": "ThW2LqFvQzkmtkDK",
+      "timezone": "Europe/Paris"
+    },
+    "staticData": null,
+    "meta": {
+      "aiBuilderAssisted": true,
+      "builderVariant": "mcp"
+    },
+    "nodeGroups": [],
+    "pinData": null,
+    "versionId": "b99484ad-fbd2-4173-8efc-808b922eccad",
+    "activeVersionId": "b99484ad-fbd2-4173-8efc-808b922eccad",
+    "versionCounter": 3,
+    "triggerCount": 1,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-10-17T16:23:49.226Z",
+        "createdAt": "2026-10-17T16:23:49.226Z",
+        "role": "workflow:owner",
+        "workflowId": "5yvBg4c45Jf2vavL",
+        "projectId": "eWYSi6FqDFFapx4F",
+        "project": {
+          "updatedAt": "2025-06-12T10:46:58.347Z",
+          "createdAt": "2025-06-12T10:46:33.267Z",
+          "id": "eWYSi6FqDFFapx4F",
+          "name": "Josh Eliott SOUSSAN <joshsoussan@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "cddded04-03e3-498f-a37d-dd772d096da0"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]
