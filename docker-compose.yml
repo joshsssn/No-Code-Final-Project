@@ -1,0 +1,39 @@
+﻿services:
+  # Public HTTPS tunnel so Telegram can reach the n8n webhooks
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.1
+    container_name: carbu-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://n8n:5678
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.44.5
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=Europe/Paris
+      - TZ=Europe/Paris
+      - N8N_RUNNERS_ENABLED=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      # Key that encrypts the stored credentials (kept in .env, never committed)
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # Public URL given to Telegram for the webhooks (written by start-carbu.sh)
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_PROXY_HOPS=1
+      # The editor stays on localhost; only webhooks go through the tunnel
+      - N8N_EDITOR_BASE_URL=http://localhost:5678/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  # Workflows, credentials and Data Tables survive `docker compose down` / `up`
+  n8n_data:
+    name: carbu_n8n_data
