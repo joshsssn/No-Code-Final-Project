@@ -1,0 +1,900 @@
+[
+  {
+    "updatedAt": "2026-10-22T11:51:01.983Z",
+    "createdAt": "2026-10-17T16:16:07.320Z",
+    "id": "ljnG8v991Pbmto9P",
+    "name": "Carbu - WF3 Price sweep",
+    "description": "Sweep 07:00/18:00 (+ manuel, + /sweep) : vérifie chaque alerte active via WF2, hystérésis, ping Razmo, historique des prix.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "id": "82c4d6bf-9d56-43cb-bcbd-54fa29c11e6e",
+        "name": "Schedule 07:00 & 18:00",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          0,
+          208
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "triggerAtHour": 7
+              },
+              {
+                "triggerAtHour": 18
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "09000a04-1b6b-4f21-b982-4e74390458ee",
+        "name": "Read active alerts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          240,
+          400
+        ],
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "active",
+                "condition": "isTrue"
+              }
+            ]
+          },
+          "returnAll": true
+        }
+      },
+      {
+        "id": "a46876a1-5747-4aec-b256-4148c206145c",
+        "name": "Manual Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          400
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "cdef57d7-075f-4046-8561-df9c10675be5",
+        "name": "When called by Razmo (/sweep)",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.3,
+        "position": [
+          0,
+          608
+        ],
+        "parameters": {
+          "inputSource": "passthrough"
+        }
+      },
+      {
+        "id": "72b8ca91-2fa0-44ae-8359-819eea78ee03",
+        "name": "Sweep summary",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          240
+        ],
+        "parameters": {
+          "jsCode": "// Resume du sweep : alertes verifiees, pings envoyes, alertes rearmees\nconst runs = name => { let n = 0; for (let i = 0; i < 1000; i++) { let it = []; try { it = $(name).all(0, i); } catch (e) { break; } if (!it || !it.length) break; n++; } return n; };\nreturn [{ json: { checked: runs('Decide'), fired: runs('Mark alert fired'), rearmed: runs('Rearm alert') } }];"
+        }
+      },
+      {
+        "id": "bfdc392b-eceb-4fc7-98c0-b7429bfe1ef1",
+        "name": "Find stations (WF2)",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.4,
+        "onError": "continueRegularOutput",
+        "position": [
+          720,
+          480
+        ],
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "ATNKfNyYD9JqrDgC",
+            "cachedResultName": "Carbu - WF2 Find stations"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "place": "={{ $json.place_label || $json.postcode }}",
+              "fuel": "={{ $json.fuel }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "place",
+                "displayName": "place",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "fuel",
+                "displayName": "fuel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              }
+            ],
+            "attemptToConvertTypes": false
+          },
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "04d7ee45-3f3b-4d1b-a92b-4c928aacec91",
+        "name": "Loop Over Items",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          480,
+          400
+        ],
+        "parameters": {
+          "options": {}
+        }
+      },
+      {
+        "id": "9d8081b3-ef44-4285-bf35-a82c9cf213c5",
+        "name": "Decide",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          944,
+          480
+        ],
+        "parameters": {
+          "jsCode": "// Hysteresis : fire si min <= seuil et alerte armee ; rearm si min > seuil + 0.02 et desarmee ; sinon skip\nconst a = $('Loop Over Items').first().json;\nconst r = $input.first().json;\nconst t = Number(a.threshold);\nlet decision = 'skip';\nif (r.ok && r.min <= t && a.armed === true) decision = 'fire';\nelse if (r.ok && r.min > t + 0.02 && a.armed !== true) decision = 'rearm';\nreturn [{ json: { decision, alert_id: a.id, chat_id: a.chat_id, fuel: a.fuel, threshold: t, place_label: r.place_label || a.place_label,\n  ok: !!r.ok, min: r.min, avg: r.avg, station_count: r.station_count, best: r.ok ? r.stations[0] : null } }];"
+        }
+      },
+      {
+        "id": "d918f852-fb6d-4277-8f7f-cca545751d46",
+        "name": "Crossed and not already sent?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1168,
+          480
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.decision }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "rightValue": "fire"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "9cd6c1ca-f351-43a6-84ee-b7d4fac988c9",
+        "name": "Razmo punchline",
+        "type": "@n8n/n8n-nodes-langchain.chainLlm",
+        "typeVersion": 1.9,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueErrorOutput",
+        "position": [
+          1344,
+          320
+        ],
+        "parameters": {
+          "promptType": "define",
+          "text": "=Le prix du {{ $json.fuel }} à {{ $json.place_label }} vient de passer sous le seuil de l'utilisateur. Écris la phrase de Razmo.",
+          "messages": {
+            "messageValues": [
+              {
+                "message": "Tu es Razmo, un gros rat calme et patient qui surveille les pompes à essence. Tu parles toujours de toi à la troisième personne (« Razmo »). Tu écris UNE seule phrase courte, chaleureuse, en français. Tu n'écris AUCUN chiffre, aucun prix, aucun nombre, aucune date. Réponds uniquement avec la phrase, sans guillemets."
+              }
+            ]
+          },
+          "batching": {}
+        }
+      },
+      {
+        "id": "da33e5fe-d822-407e-8c46-4c0a82f8286e",
+        "name": "OpenAI Chat Model (NanoGPT)",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          1408,
+          560
+        ],
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "id",
+            "value": "deepseek/deepseek-v4.1-flash-1017"
+          },
+          "responsesApiEnabled": false,
+          "options": {
+            "maxTokens": 120,
+            "temperature": 0.9,
+            "timeout": 30000,
+            "maxRetries": 2
+          }
+        },
+        "credentials": {
+          "openAiApi": {
+            "id": "goznmBPWZ7MryTXO",
+            "name": "NanoGPT"
+          }
+        }
+      },
+      {
+        "id": "a834936b-25ab-459c-9871-b4e7fdf8eb38",
+        "name": "Validate punchline",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1648,
+          368
+        ],
+        "parameters": {
+          "jsCode": "// Rejette une punchline vide ou avec un chiffre (template a la place) puis construit le ping de Razmo\nconst d = $('Decide').first().json;\nconst T = [\"Razmo a vu. Razmo content. Tu y vas ?\", \"Razmo bouge pas, mais toi tu peux filer à la pompe.\", \"Razmo l'avait dit : la patience paie toujours.\", \"Razmo a attendu longtemps. Ça valait le coup.\", \"Razmo te garde la place, va faire le plein tranquille.\", \"Le prix a baissé, Razmo sourit dans sa moustache.\", \"Razmo a l'œil sur les pompes. Et là, c'est le moment.\", \"Razmo dit : c'est le moment, mais sans courir.\", \"Razmo est fier de toi. Et un peu de lui aussi.\", \"Razmo a senti l'odeur de la bonne affaire.\"];\nlet p = String($input.first().json.text || '').trim().replace(/\\s+/g, ' ').replace(/^[\"«\\s]+|[\"»\\s]+$/g, '');\nconst fromLlm = !!p && !/\\d/.test(p) && p.length <= 200;\nif (!fromLlm) p = T[Math.floor(Math.random() * T.length)];\nconst e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst eur = n => Number(n).toFixed(3).replace(/0$/, '').replace('.', ',') + ' €';\nconst b = d.best || {};\nconst text = '🐀 <b>Razmo a vu !</b> ' + e(d.fuel) + ' à <b>' + eur(d.min) + '</b> chez ' + e(b.name) + '.\\nTon seuil : ' + eur(d.threshold) + ' (' + e(d.place_label) + ').\\n\\n<i>' + e(p) + '</i>';\nreturn [{ json: { chat_id: d.chat_id, text, punchline: p, from_llm: fromLlm } }];"
+        }
+      },
+      {
+        "id": "fee15e38-6a9f-445d-b774-9aee4ba45ddd",
+        "name": "Rearm needed?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1408,
+          768
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.decision }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                },
+                "rightValue": "rearm"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "3be4ad21-e1b7-4e23-a77e-f814708f222c",
+        "name": "Rearm alert",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1648,
+          704
+        ],
+        "parameters": {
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyValue": "={{ $('Decide').first().json.alert_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "armed": true
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "armed",
+                "displayName": "armed",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "8349bb5b-b7b3-4ddf-bc35-2c662b0f0bf3",
+        "name": "Prices OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "executeOnce": true,
+        "position": [
+          2304,
+          608
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $('Decide').first().json.ok }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "rightValue": ""
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "16b7a25c-3d6c-41d4-8a78-227a870b8f06",
+        "name": "Send Telegram (Razmo)",
+        "webhookId": "d87920a4-8589-4073-bc99-e3f75528e742",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueRegularOutput",
+        "position": [
+          1872,
+          368
+        ],
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "={{ $json.text }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "disable_web_page_preview": true,
+            "parse_mode": "HTML"
+          }
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "tZo3MESnFhVP9vn5",
+            "name": "Telegram Razmo"
+          }
+        }
+      },
+      {
+        "id": "23588f70-87bd-462a-934c-7382b79c5e79",
+        "name": "Mark alert fired",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          2080,
+          304
+        ],
+        "parameters": {
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyValue": "={{ $('Decide').first().json.alert_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "armed": false,
+              "last_alert_price": "={{ $('Decide').first().json.min }}",
+              "last_alert_at": "={{ $now.toISO() }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "armed",
+                "displayName": "armed",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "last_alert_price",
+                "displayName": "last_alert_price",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "last_alert_at",
+                "displayName": "last_alert_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "dateTime",
+                "canBeUsedToMatch": true
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "531e2b92-3cac-49a1-bab7-2cb8c8d944ad",
+        "name": "Log price history",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          2528,
+          528
+        ],
+        "parameters": {
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "slz9z7UPM3yqPSEd",
+            "cachedResultName": "price_history"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "day",
+                "keyValue": "={{ $now.setZone('Europe/Paris').startOf('day').toISO() }}"
+              },
+              {
+                "keyName": "slot",
+                "keyValue": "={{ $now.setZone('Europe/Paris').hour < 12 ? 'am' : 'pm' }}"
+              },
+              {
+                "keyName": "place_label",
+                "keyValue": "={{ $('Decide').first().json.place_label }}"
+              },
+              {
+                "keyName": "fuel",
+                "keyValue": "={{ $('Decide').first().json.fuel }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "day": "={{ $now.setZone('Europe/Paris').startOf('day').toISO() }}",
+              "slot": "={{ $now.setZone('Europe/Paris').hour < 12 ? 'am' : 'pm' }}",
+              "place_label": "={{ $('Decide').first().json.place_label }}",
+              "fuel": "={{ $('Decide').first().json.fuel }}",
+              "min_price": "={{ $('Decide').first().json.min }}",
+              "avg_price": "={{ $('Decide').first().json.avg }}",
+              "station_count": "={{ $('Decide').first().json.station_count }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "day",
+                "displayName": "day",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "dateTime",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "slot",
+                "displayName": "slot",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "place_label",
+                "displayName": "place_label",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "fuel",
+                "displayName": "fuel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "min_price",
+                "displayName": "min_price",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "avg_price",
+                "displayName": "avg_price",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "station_count",
+                "displayName": "station_count",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true
+              }
+            ]
+          },
+          "options": {}
+        }
+      }
+    ],
+    "connections": {
+      "Schedule 07:00 & 18:00": {
+        "main": [
+          [
+            {
+              "node": "Read active alerts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read active alerts": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Trigger": {
+        "main": [
+          [
+            {
+              "node": "Read active alerts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "When called by Razmo (/sweep)": {
+        "main": [
+          [
+            {
+              "node": "Read active alerts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Find stations (WF2)": {
+        "main": [
+          [
+            {
+              "node": "Decide",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Over Items": {
+        "main": [
+          [
+            {
+              "node": "Sweep summary",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Find stations (WF2)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Decide": {
+        "main": [
+          [
+            {
+              "node": "Crossed and not already sent?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Crossed and not already sent?": {
+        "main": [
+          [
+            {
+              "node": "Razmo punchline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Rearm needed?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Razmo punchline": {
+        "main": [
+          [
+            {
+              "node": "Validate punchline",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Validate punchline",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model (NanoGPT)": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Razmo punchline",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate punchline": {
+        "main": [
+          [
+            {
+              "node": "Send Telegram (Razmo)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rearm needed?": {
+        "main": [
+          [
+            {
+              "node": "Rearm alert",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prices OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rearm alert": {
+        "main": [
+          [
+            {
+              "node": "Prices OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prices OK?": {
+        "main": [
+          [
+            {
+              "node": "Log price history",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Telegram (Razmo)": {
+        "main": [
+          [
+            {
+              "node": "Mark alert fired",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Mark alert fired": {
+        "main": [
+          [
+            {
+              "node": "Prices OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Log price history": {
+        "main": [
+          [
+            {
+              "node": "Loop Over Items",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "availableInMCP": true,
+      "errorWorkflow": "ThW2LqFvQzkmtkDK",
+      "timezone": "Europe/Paris",
+      "binaryMode": "separate"
+    },
+    "staticData": {
+      "node:Schedule 07:00 & 18:00": {
+        "recurrenceRules": [
+          null,
+          null
+        ],
+        "recurrenceRuleSignatures": [
+          null,
+          null
+        ]
+      }
+    },
+    "meta": {
+      "aiBuilderAssisted": true,
+      "builderVariant": "mcp"
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "0fbfbdb3-e6fd-49f2-8dee-2e6da18ea1f0",
+    "activeVersionId": "0fbfbdb3-e6fd-49f2-8dee-2e6da18ea1f0",
+    "versionCounter": 5,
+    "triggerCount": 1,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-10-17T16:16:07.323Z",
+        "createdAt": "2026-10-17T16:16:07.323Z",
+        "role": "workflow:owner",
+        "workflowId": "ljnG8v991Pbmto9P",
+        "projectId": "eWYSi6FqDFFapx4F",
+        "project": {
+          "updatedAt": "2025-06-12T10:46:58.347Z",
+          "createdAt": "2025-06-12T10:46:33.267Z",
+          "id": "eWYSi6FqDFFapx4F",
+          "name": "Josh Eliott SOUSSAN <joshsoussan@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "cddded04-03e3-498f-a37d-dd772d096da0"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]
