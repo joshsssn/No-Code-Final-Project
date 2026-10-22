@@ -1,0 +1,40 @@
+# Secrets and runtime data
+.env
+.env.*
+!.env.example
+data/
+logs/
+backup/
+
+# Local tooling and personal notes
+CLAUDE.md
+.claude/
+RAPPORT_V1.md
+REPORT_V1_EN.md
+SOUTENANCE_ORALE.md
+
+# Evaluation checklist photos
+1.jpeg
+2.jpeg
+3.jpeg
+
+# Generated deliverables and drafts
+*.zip
+livrable/
+/carbu-rat.pdf
+/N8n (1).pdf
+workflows/*.sdk.js
+
+# LaTeX build files
+slides/*.aux
+slides/*.log
+slides/*.nav
+slides/*.out
+slides/*.snm
+slides/*.toc
+slides/build.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
