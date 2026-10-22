@@ -1,0 +1,257 @@
+[
+  {
+    "updatedAt": "2026-10-22T11:51:02.509Z",
+    "createdAt": "2026-10-17T16:09:57.659Z",
+    "id": "ThW2LqFvQzkmtkDK",
+    "name": "Carbu - WF5 Error",
+    "description": "Error workflow : lit owner_chat_id dans config et prévient le propriétaire via Razmo.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "id": "7ad2179d-48c3-4a58-baf6-c00b45520c3e",
+        "name": "Error Trigger",
+        "type": "n8n-nodes-base.errorTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          304
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "e6a6c1aa-3320-4451-882e-84cf5a19d082",
+        "name": "Read owner_chat_id",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          224,
+          304
+        ],
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "5n1kBw38vfsApLF7",
+            "cachedResultName": "config"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "keyValue": "owner_chat_id"
+              }
+            ]
+          },
+          "limit": 1
+        }
+      },
+      {
+        "id": "b0f09c55-1ec0-4dc4-b64b-3582a68c42ca",
+        "name": "Shape error message",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          448,
+          304
+        ],
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "a1",
+                "name": "chat_id",
+                "value": "={{ $json.value || \"\" }}",
+                "type": "string"
+              },
+              {
+                "id": "a2",
+                "name": "workflow",
+                "value": "={{ $('Error Trigger').first().json.workflow?.name || 'inconnu' }}",
+                "type": "string"
+              },
+              {
+                "id": "a3",
+                "name": "node",
+                "value": "={{ $('Error Trigger').first().json.execution?.lastNodeExecuted || $('Error Trigger').first().json.trigger?.error?.node?.name || 'inconnu' }}",
+                "type": "string"
+              },
+              {
+                "id": "a4",
+                "name": "message",
+                "value": "={{ $('Error Trigger').first().json.execution?.error?.message || $('Error Trigger').first().json.trigger?.error?.message || 'erreur sans message' }}",
+                "type": "string"
+              },
+              {
+                "id": "a5",
+                "name": "execution_url",
+                "value": "={{ $('Error Trigger').first().json.execution?.url || '' }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "03c03d7b-2de8-4d3d-9617-ceb220709aa9",
+        "name": "Owner known?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          672,
+          304
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.chat_id }}",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                },
+                "rightValue": "",
+                "id": "9b37132a-7e2a-4d5e-840b-eef30ca47ef5"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "77a678b1-5f20-4a30-8275-8d3ab41b74fb",
+        "name": "Send Telegram (Razmo)",
+        "webhookId": "4222d2db-eaad-4a61-84f4-34752139e13a",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueRegularOutput",
+        "position": [
+          880,
+          208
+        ],
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "={{ (() => { const e = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); return ('🚨 <b>Razmo a vu une panne.</b>\\nWorkflow : <b>' + e($json.workflow) + '</b>\\nNode : ' + e($json.node) + '\\nMessage : ' + e($json.message) + ($json.execution_url ? '\\n<a href=\"' + e($json.execution_url) + '\">Voir l\\'exécution</a>' : '')).slice(0, 3900); })() }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "disable_web_page_preview": true,
+            "parse_mode": "HTML"
+          }
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "tZo3MESnFhVP9vn5",
+            "name": "Telegram Razmo"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Error Trigger": {
+        "main": [
+          [
+            {
+              "node": "Read owner_chat_id",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read owner_chat_id": {
+        "main": [
+          [
+            {
+              "node": "Shape error message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Shape error message": {
+        "main": [
+          [
+            {
+              "node": "Owner known?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Owner known?": {
+        "main": [
+          [
+            {
+              "node": "Send Telegram (Razmo)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "availableInMCP": true,
+      "timezone": "Europe/Paris",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": {
+      "aiBuilderAssisted": true,
+      "builderVariant": "mcp"
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "7141f40f-dfdc-4125-bf91-63b6d467db27",
+    "activeVersionId": "7141f40f-dfdc-4125-bf91-63b6d467db27",
+    "versionCounter": 4,
+    "triggerCount": 0,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-10-17T16:09:57.663Z",
+        "createdAt": "2026-10-17T16:09:57.663Z",
+        "role": "workflow:owner",
+        "workflowId": "ThW2LqFvQzkmtkDK",
+        "projectId": "eWYSi6FqDFFapx4F",
+        "project": {
+          "updatedAt": "2025-06-12T10:46:58.347Z",
+          "createdAt": "2025-06-12T10:46:33.267Z",
+          "id": "eWYSi6FqDFFapx4F",
+          "name": "Josh Eliott SOUSSAN <joshsoussan@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "cddded04-03e3-498f-a37d-dd772d096da0"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]
