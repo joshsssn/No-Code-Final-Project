@@ -1,0 +1,810 @@
+[
+  {
+    "updatedAt": "2026-10-22T11:51:00.548Z",
+    "createdAt": "2026-10-17T16:12:57.735Z",
+    "id": "2vu1P4DfRSB4YxOp",
+    "name": "Carbu - WF1 Rapido",
+    "description": "Bot Rapido : /plein (WF2), menu, texte libre via agent IA NanoGPT avec find_stations et my_alerts, lien vers Razmo.",
+    "active": true,
+    "isArchived": false,
+    "nodes": [
+      {
+        "id": "16185e36-d97c-4d79-a21e-90c1af99f35b",
+        "name": "Telegram Trigger (Rapido)",
+        "webhookId": "48d12421-050c-4f65-8e8b-9e6fa1d7e3c4",
+        "type": "n8n-nodes-base.telegramTrigger",
+        "typeVersion": 1.5,
+        "position": [
+          0,
+          400
+        ],
+        "parameters": {
+          "updates": [
+            "message"
+          ],
+          "additionalFields": {}
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "r0qvSm86H23d3znW",
+            "name": "Telegram Rapido"
+          }
+        }
+      },
+      {
+        "id": "8e6f8048-7c59-4997-b0b5-e9e6797fbb64",
+        "name": "Read the message",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          400
+        ],
+        "parameters": {
+          "jsCode": "// Lit le message Telegram : chat_id, commande, lieu et carburant normalises (synonymes)\nconst MAP = { gazole: 'gazole', diesel: 'gazole', gasoil: 'gazole', gazoil: 'gazole', sp95: 'sp95', '95': 'sp95', e10: 'e10', sp95e10: 'e10', sp98: 'sp98', '98': 'sp98', e85: 'e85', gplc: 'gplc', gpl: 'gplc' };\nconst norm = w => MAP[String(w || '').toLowerCase().replace(/[\\s-]/g, '')] || '';\nconst m = $input.first().json.message || {};\nconst text = String(m.text || '').trim();\nconst chat_id = String((m.chat && m.chat.id) || '');\nconst cmd = ((text.match(/^\\/(\\w+)/) || [])[1] || '').toLowerCase();\nlet command = 'free', place = '', fuel = '';\nif (!text || cmd === 'start' || cmd === 'help') command = 'help';\nelse if (cmd === 'plein') {\n  command = 'plein';\n  const w = text.replace(/^\\/\\S+\\s*/, '').split(/\\s+/).filter(Boolean);\n  if (w.length && norm(w[w.length - 1])) { fuel = norm(w.pop()); }\n  else if (w.length && norm(w[0])) { fuel = norm(w.shift()); }\n  place = w.join(' ');\n} else if (cmd) command = 'help';\nreturn [{ json: { chat_id, text, command, place, fuel, valid: command !== 'plein' || !!(place && fuel) } }];"
+        }
+      },
+      {
+        "id": "64af62cc-17d4-49bc-8f6d-514ba9933511",
+        "name": "Command Router",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          448,
+          400
+        ],
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "help",
+                      "id": "fbb2e9b3-4c38-44fd-bf6c-5ba9ccdda66f"
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "help"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "plein",
+                      "id": "eb878c13-80fa-47f5-80e5-172e1cd21f06"
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "plein"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.command }}",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "rightValue": "free",
+                      "id": "5d62b885-32bf-4265-9e99-d32bcf6d5ffd"
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "free text"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "10a849e7-194d-4abf-ab40-5e2c52e6005b",
+        "name": "Rapido menu",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          704,
+          160
+        ],
+        "parameters": {
+          "jsCode": "// Menu statique de Rapido (0 appel LLM)\nconst q = $input.first().json;\nconst text = '🐀 <b>Rapido, vite vite vite !</b>\\n\\n'\n  + '<b>/plein &lt;lieu&gt; &lt;carburant&gt;</b> : les 5 pompes les moins chères autour.\\n'\n  + 'Exemple : <code>/plein Créteil gazole</code>\\n'\n  + 'Carburants : gazole, sp95, e10, sp98, e85, gplc.\\n\\n'\n  + 'Ou écris-moi en texte libre : « je vais à Lyon demain, je fais le plein où ? »\\n\\n'\n  + 'Une alerte de prix ? C\\'est Razmo qui surveille : @razmo_carbu_bot';\nreturn [{ json: { chat_id: q.chat_id, text } }];"
+        }
+      },
+      {
+        "id": "7ab57beb-b72b-4f3c-b606-cb825080fbf0",
+        "name": "Plein complete?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          704,
+          400
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "leftValue": "={{ $json.valid }}",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                },
+                "rightValue": "",
+                "id": "bcbe2eb4-46c2-4dcb-bd39-15729145095a"
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "56e107bc-78fa-4aaa-b268-c6f716df4a50",
+        "name": "Find stations (WF2)",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.4,
+        "onError": "continueErrorOutput",
+        "position": [
+          960,
+          352
+        ],
+        "parameters": {
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "ATNKfNyYD9JqrDgC",
+            "cachedResultName": "Carbu - WF2 Find stations"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "place": "={{ $json.place }}",
+              "fuel": "={{ $json.fuel }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "place",
+                "displayName": "place",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "fuel",
+                "displayName": "fuel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              }
+            ],
+            "attemptToConvertTypes": false
+          },
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "a3a9033d-241e-4c62-b247-a48ce81da349",
+        "name": "Format plein answer",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1200,
+          352
+        ],
+        "parameters": {
+          "jsCode": "// Met en forme la reponse /plein dans la voix de Rapido (tous les prix viennent de WF2)\nconst r = $input.first().json;\nconst q = $('Read the message').first().json;\nconst e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst eur = n => Number(n).toFixed(3).replace(/0$/, '').replace('.', ',') + ' €';\nif (!r.ok) {\n  const msgs = {\n    place_not_found: 'Connais pas « ' + e(q.place) + ' » ! Une ville ou un code postal, vite !',\n    unknown_fuel: 'Carburant inconnu ! gazole, sp95, e10, sp98, e85 ou gplc. Allez !',\n    no_station: 'Aucune pompe à moins de 10 km pour ce carburant. Faut bouger !',\n    api_down: 'Les pompes répondent pas. Réessaie dans une minute, je file !'\n  };\n  return [{ json: { ok: false, chat_id: q.chat_id, text: msgs[r.reason] || msgs.api_down } }];\n}\nconst lines = r.stations.map((s, i) => (i + 1) + '. <b>' + eur(s.price) + '</b> · ' + e(s.name));\nconst text = 'Vite vite vite ! ' + r.stations.length + ' pompes à moins de ' + r.radius_km + ' km de ' + e(r.place_label) + ' (' + e(r.fuel) + ').\\n\\n'\n  + lines.join('\\n') + '\\n\\nLa moins chère : <b>' + eur(r.min) + '</b>. Moyenne ' + eur(r.avg) + '. Allez, file !';\nreturn [{ json: { ok: true, chat_id: q.chat_id, text, fuel: r.fuel, min: r.min, postcode: r.postcode } }];"
+        }
+      },
+      {
+        "id": "2e8d7b54-9399-4c0e-94c9-3819a56292e9",
+        "name": "Plein usage",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          960,
+          560
+        ],
+        "parameters": {
+          "jsCode": "// Message d'usage quand /plein est incomplet\nconst q = $input.first().json;\nlet text = 'Hé, trop vite même pour moi ! Dis-moi où et quoi : <code>/plein Créteil gazole</code>';\nif (q.place && !q.fuel) text = 'Quel carburant ? gazole, sp95, e10, sp98, e85 ou gplc. Exemple : <code>/plein Créteil gazole</code>';\nreturn [{ json: { chat_id: q.chat_id, text } }];"
+        }
+      },
+      {
+        "id": "9f74bd9d-8b87-4104-9e7f-109c6eaae2a4",
+        "name": "Rapido AI Agent",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "onError": "continueErrorOutput",
+        "position": [
+          960,
+          720
+        ],
+        "parameters": {
+          "promptType": "define",
+          "text": "={{ $json.text }}",
+          "options": {
+            "systemMessage": "Tu es Rapido, un petit rat pressé qui aide à trouver le carburant le moins cher en France. Tu tutoies, tu fais des phrases courtes, comme si tu étais déjà en retard. Tu réponds en français.\n\nOutils :\n- find_stations(place, fuel) : les 5 pompes les moins chères autour d'un lieu. fuel vaut gazole, sp95, e10, sp98, e85 ou gplc (diesel = gazole).\n- my_alerts : les alertes de prix de l'utilisateur chez Razmo.\n\nRègles absolues :\n- Ne donne JAMAIS un prix qui ne vient pas d'un outil. Pas de prix inventé, pas d'estimation, pas de prix de mémoire.\n- Pour toute question de prix ou de station, appelle find_stations. Si le lieu ou le carburant manque, demande-le en une phrase.\n- Si l'outil renvoie ok=false, dis-le simplement et propose /plein <lieu> <carburant>.\n- Pas de Markdown, pas de tableau. Texte brut court, 6 lignes max.\n- Pour être alerté quand le prix baisse, renvoie vers Razmo : @razmo_carbu_bot.",
+            "maxIterations": 5,
+            "enableStreaming": false
+          }
+        }
+      },
+      {
+        "id": "ad43de90-f491-4e4d-8b9a-5e9339beeae3",
+        "name": "OpenAI Chat Model (NanoGPT)",
+        "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+        "typeVersion": 1.3,
+        "position": [
+          912,
+          912
+        ],
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "id",
+            "value": "deepseek/deepseek-v4.1-flash-1017"
+          },
+          "responsesApiEnabled": false,
+          "options": {
+            "maxTokens": 800,
+            "temperature": 0.4,
+            "timeout": 60000,
+            "maxRetries": 2
+          }
+        },
+        "credentials": {
+          "openAiApi": {
+            "id": "goznmBPWZ7MryTXO",
+            "name": "NanoGPT"
+          }
+        }
+      },
+      {
+        "id": "35502e92-e7f1-4c9e-af73-94df06a5a15c",
+        "name": "Window memory (10)",
+        "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+        "typeVersion": 1.4,
+        "position": [
+          1056,
+          944
+        ],
+        "parameters": {
+          "sessionIdType": "customKey",
+          "sessionKey": "={{ $('Read the message').first().json.chat_id }}",
+          "contextWindowLength": 10
+        }
+      },
+      {
+        "id": "27377153-8234-4113-b6e6-fe429cb5f9f0",
+        "name": "find_stations",
+        "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+        "typeVersion": 2.2,
+        "position": [
+          1232,
+          912
+        ],
+        "parameters": {
+          "description": "Trouve les 5 stations les moins chères autour d'un lieu en France pour un carburant. Entrées : place (ville, adresse ou code postal) et fuel (gazole, sp95, e10, sp98, e85 ou gplc). Renvoie ok, place_label, stations [{name, price}], min, avg, spread, radius_km. Si ok=false, reason explique l'échec.",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "ATNKfNyYD9JqrDgC",
+            "cachedResultName": "Carbu - WF2 Find stations"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "place": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('place', 'Lieu en France : ville, adresse ou code postal') }}",
+              "fuel": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('fuel', 'Carburant : gazole, sp95, e10, sp98, e85 ou gplc') }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "place",
+                "displayName": "place",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              },
+              {
+                "id": "fuel",
+                "displayName": "fuel",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "canBeUsedToMatch": true,
+                "type": "string"
+              }
+            ],
+            "attemptToConvertTypes": false
+          }
+        }
+      },
+      {
+        "id": "55943fd4-e6ea-4318-b88d-48a1d42a72db",
+        "name": "my_alerts",
+        "type": "n8n-nodes-base.dataTableTool",
+        "typeVersion": 1.1,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1392,
+          912
+        ],
+        "parameters": {
+          "descriptionType": "manual",
+          "toolDescription": "Liste les alertes de prix actives de l'utilisateur (carburant, seuil, lieu, armée ou non), créées chez Razmo.",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "0YNY8S0xLGtvK7OI",
+            "cachedResultName": "alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "chat_id",
+                "keyValue": "={{ $('Read the message').first().json.chat_id }}"
+              },
+              {
+                "keyName": "active",
+                "condition": "isTrue"
+              }
+            ]
+          },
+          "returnAll": true
+        }
+      },
+      {
+        "id": "f90b7101-4d2c-4616-ae94-ad9570096e2b",
+        "name": "Agent fallback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1456,
+          752
+        ],
+        "parameters": {
+          "jsCode": "// Repli dans la voix de Rapido quand le LLM ou un outil echoue\nconst q = $('Read the message').first().json;\nreturn [{ json: { chat_id: q.chat_id, text: 'Oups, ma cervelle de rat a calé ! Essaie <code>/plein Créteil gazole</code>, ça marche toujours. Vite !' } }];"
+        }
+      },
+      {
+        "id": "952c04be-b088-488c-8101-c437b1559869",
+        "name": "Read razmo_username",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "executeOnce": true,
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          1424,
+          352
+        ],
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "5n1kBw38vfsApLF7",
+            "cachedResultName": "config"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "keyValue": "razmo_username"
+              }
+            ]
+          },
+          "limit": 1
+        }
+      },
+      {
+        "id": "c1c4ed27-f55e-4d53-bf37-fb60de418eeb",
+        "name": "Hand over to Razmo",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1648,
+          352
+        ],
+        "parameters": {
+          "jsCode": "// Ajoute le lien profond vers Razmo, seuil = meilleur prix - 3 centimes\nconst a = $('Format plein answer').first().json;\nconst user = $input.first().json.value || 'razmo_carbu_bot';\nif (!a.ok) return [{ json: { chat_id: a.chat_id, text: a.text } }];\nconst cents = Math.round((a.min - 0.03) * 100);\nconst link = 'https://t.me/' + user + '?start=a_' + a.fuel + '_' + cents + '_' + a.postcode;\nconst seuil = (cents / 100).toFixed(2).replace('.', ',');\nreturn [{ json: { chat_id: a.chat_id, text: a.text + '\\n\\n🐀 Razmo peut surveiller pour toi (alerte sous ' + seuil + ' €) : <a href=\"' + link + '\">clique ici</a>' } }];"
+        }
+      },
+      {
+        "id": "cc6e381e-abc2-46ec-acc9-079e07e44956",
+        "name": "Split for Telegram",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1888,
+          400
+        ],
+        "parameters": {
+          "jsCode": "// Decoupe chaque message en morceaux de moins de 4000 caracteres (limite Telegram)\nconst out = [];\nfor (const it of $input.all()) {\n  let rest = String(it.json.text || '');\n  while (rest.length > 3900) {\n    let cut = rest.lastIndexOf('\\n', 3900);\n    if (cut < 1000) cut = 3900;\n    out.push({ json: { chat_id: it.json.chat_id, text: rest.slice(0, cut) } });\n    rest = rest.slice(cut);\n  }\n  if (rest.trim()) out.push({ json: { chat_id: it.json.chat_id, text: rest } });\n}\nreturn out;"
+        }
+      },
+      {
+        "id": "cfffd262-34d4-4f49-93db-e3423875138d",
+        "name": "Shape agent reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1280,
+          624
+        ],
+        "parameters": {
+          "jsCode": "// Nettoie la reponse de l'agent pour Telegram (HTML echappe, gras Markdown converti)\nconst q = $('Read the message').first().json;\nlet t = String($input.first().json.output || '').trim();\nt = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\\*\\*(.+?)\\*\\*/g, '<b>$1</b>');\nif (!t) t = \"Euh, j'ai perdu le fil. Redis-moi, vite !\";\nreturn [{ json: { chat_id: q.chat_id, text: t } }];"
+        }
+      },
+      {
+        "id": "fffba0ca-10e2-4460-84ec-0bc8beb973d2",
+        "name": "Send Telegram (Rapido)",
+        "webhookId": "24aab298-ea97-45b8-a39e-426f93954f2c",
+        "type": "n8n-nodes-base.telegram",
+        "typeVersion": 1.2,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 2000,
+        "position": [
+          2112,
+          400
+        ],
+        "parameters": {
+          "chatId": "={{ $json.chat_id }}",
+          "text": "={{ $json.text }}",
+          "additionalFields": {
+            "appendAttribution": false,
+            "disable_web_page_preview": true,
+            "parse_mode": "HTML"
+          }
+        },
+        "credentials": {
+          "telegramApi": {
+            "id": "r0qvSm86H23d3znW",
+            "name": "Telegram Rapido"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "Telegram Trigger (Rapido)": {
+        "main": [
+          [
+            {
+              "node": "Read the message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read the message": {
+        "main": [
+          [
+            {
+              "node": "Command Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Command Router": {
+        "main": [
+          [
+            {
+              "node": "Rapido menu",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Plein complete?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Rapido AI Agent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rapido menu": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Plein complete?": {
+        "main": [
+          [
+            {
+              "node": "Find stations (WF2)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Plein usage",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Find stations (WF2)": {
+        "main": [
+          [
+            {
+              "node": "Format plein answer",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Format plein answer",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format plein answer": {
+        "main": [
+          [
+            {
+              "node": "Read razmo_username",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Plein usage": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Rapido AI Agent": {
+        "main": [
+          [
+            {
+              "node": "Shape agent reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Agent fallback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "OpenAI Chat Model (NanoGPT)": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Rapido AI Agent",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Window memory (10)": {
+        "ai_memory": [
+          [
+            {
+              "node": "Rapido AI Agent",
+              "type": "ai_memory",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "find_stations": {
+        "ai_tool": [
+          [
+            {
+              "node": "Rapido AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "my_alerts": {
+        "ai_tool": [
+          [
+            {
+              "node": "Rapido AI Agent",
+              "type": "ai_tool",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Agent fallback": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read razmo_username": {
+        "main": [
+          [
+            {
+              "node": "Hand over to Razmo",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Hand over to Razmo": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Split for Telegram": {
+        "main": [
+          [
+            {
+              "node": "Send Telegram (Rapido)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Shape agent reply": {
+        "main": [
+          [
+            {
+              "node": "Split for Telegram",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1",
+      "availableInMCP": true,
+      "errorWorkflow": "ThW2LqFvQzkmtkDK",
+      "timezone": "Europe/Paris",
+      "binaryMode": "separate"
+    },
+    "staticData": null,
+    "meta": {
+      "aiBuilderAssisted": true,
+      "builderVariant": "mcp"
+    },
+    "nodeGroups": [],
+    "pinData": {},
+    "versionId": "282cd623-0a75-453a-8257-b3046f212c54",
+    "activeVersionId": "282cd623-0a75-453a-8257-b3046f212c54",
+    "versionCounter": 8,
+    "triggerCount": 1,
+    "sourceWorkflowId": null,
+    "tags": [],
+    "shared": [
+      {
+        "updatedAt": "2026-10-17T16:12:57.738Z",
+        "createdAt": "2026-10-17T16:12:57.738Z",
+        "role": "workflow:owner",
+        "workflowId": "2vu1P4DfRSB4YxOp",
+        "projectId": "eWYSi6FqDFFapx4F",
+        "project": {
+          "updatedAt": "2025-06-12T10:46:58.347Z",
+          "createdAt": "2025-06-12T10:46:33.267Z",
+          "id": "eWYSi6FqDFFapx4F",
+          "name": "Josh Eliott SOUSSAN <joshsoussan@gmail.com>",
+          "type": "personal",
+          "icon": null,
+          "description": null,
+          "customTelemetryTags": [],
+          "creatorId": "cddded04-03e3-498f-a37d-dd772d096da0"
+        }
+      }
+    ],
+    "versionMetadata": {
+      "name": null,
+      "description": null
+    }
+  }
+]
